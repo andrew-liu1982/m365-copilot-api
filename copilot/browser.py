@@ -398,7 +398,6 @@ class BrowserCopilot:
 
     def _m365_chat(self, prompt: str, timeout: int) -> Generator[str, None, None]:
         """Send a prompt via M365 Copilot's web UI (DOM-based)."""
-        timeout = min(timeout, 60)
         page = self._page
 
         # Ensure we are on the M365 chat page
@@ -434,8 +433,11 @@ class BrowserCopilot:
             raise RuntimeError(f"M365 send button not found: {exc}")
         send_btn.click()
 
-        # Poll for the response
+        # Poll for the complete response (wait until it stops changing)
         deadline = time.time() + timeout
+        last_text = ""
+        stable_count = 0  # count of unchanged polls = response is done
+        
         while time.time() < deadline:
             containers = page.locator('[id^="chatMessageContainer"]')
             count = containers.count()
@@ -446,14 +448,29 @@ class BrowserCopilot:
                     raw = resp_div.inner_text(timeout=2000)
                 except Exception:
                     raw = ""
+                
                 if "Copilot said:" in raw:
                     text = raw.split("Copilot said:")[1].strip()
-                    first_part = text.split("\n\n")[0].strip()
-                    if first_part and "Gathering" not in first_part and "Generating" not in first_part:
-                        yield first_part
-                        return
+                    
+                    # Filter out loading states
+                    if text and not any(x in text for x in ["Gathering", "Generating", "Checking that", "Making it happen", "Putting it together", "Sorting it out"]):
+                        # Check if response is stable (unchanged for 2+ polls = done)
+                        if text == last_text:
+                            stable_count += 1
+                            if stable_count >= 2:  # text hasn't changed for 2 polls
+                                yield text
+                                return
+                        else:
+                            stable_count = 0
+                            last_text = text
+            
             time.sleep(0.5)
 
+        # If we have any accumulated text, yield it even if timed out
+        if last_text:
+            yield last_text
+            return
+            
         raise TimeoutError(f"M365 Copilot did not respond within {timeout}s")
 
     def _ensure_started(self) -> None:
