@@ -5,15 +5,42 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Bind inside the container; the host port is set under `ports` above.
+      # Network binding
       HOST: "0.0.0.0"
       PORT: "8000"
-      # Self-imposed rate limit (see server/config.py). Tune to your account.
+      
+      # Set to "m365" for enterprise environments behind firewalls
+      # (consumer mode accesses copilot.microsoft.com which may be blocked)
+      COPILOT_MODE: "m365"
+      
+      # Self-imposed rate limit. Tune based on your account's tolerance.
+      # Copilot typically handles ~15 req/min safely; defaults are conservative.
+      # See tests/ratelimit.py to probe your account's limits.
       RATE_LIMIT_RPM: "12"
       RATE_LIMIT_BURST: "4"
+    
     volumes:
-      # Persist the signed-in browser profile + cached token across restarts.
-      # Sign in once on the host (`python -m copilot login`) so this folder is
-      # populated; the container only does the headless token refresh.
+      # ⚠️ CRITICAL: Session setup (see DIRECTORY_SETUP.md for details)
+      #
+      # Before running docker compose up:
+      # 1. cd to project root (where THIS file is located)
+      # 2. Run: python -m copilot login (creates ./session/)
+      # 3. Verify: ls session/token.json (should exist)
+      #
+      # This volume mount allows the container to:
+      #   - Reuse the signed-in session from host
+      #   - Persist authentication across restarts
+      #   - Auto-refresh token (no interaction needed)
+      #   - Work completely headless
+      #
+      # Path explanation:
+      #   $(pwd)/session     = ./session/ in project root (on host)
+      #   /app/session       = /app/session (inside container)
+      #
       - ./session:/app/session
+    
     restart: unless-stopped
+    
+    # Uncomment for debugging
+    # stdin_open: true
+    # tty: true

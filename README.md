@@ -69,11 +69,18 @@ pip install -r requirements.txt
 # Install the browser Playwright needs (one-time)
 playwright install chromium
 
+# ⚠️ IMPORTANT: Make sure you're in the project root directory
+# (same directory as this README, app.py, and docker-compose.yml)
+pwd  # Verify with: ls app.py docker-compose.yml
+
 # Sign in once: a browser opens, log into your Microsoft account
 python -m copilot login
+# This creates session/token.json and session/profile/ in the current directory
 ```
 
 That's it. Your session is saved under `session/` (git-ignored, never shared) and reused on every run.
+
+> ⚠️ **Critical:** `session/` folder location depends on where you run the command. For Docker and the server to find it correctly, **always run `python -m copilot login` from the project root** (same directory as `app.py`, `docker-compose.yml`, and this README).
 
 > 💡 You can even skip step 4: the **first** time you call `chat()` or start the server, it opens the sign-in browser for you automatically.
 
@@ -83,18 +90,45 @@ That's it. Your session is saved under `session/` (git-ignored, never shared) an
 
 Prefer a container? You can run the OpenAI-compatible server in Docker once you've signed in.
 
-> **Sign in on the host first.** The login step above opens a *visible* browser, which can't run inside the headless container — so run `python -m copilot login` on your host to populate `session/`. The container mounts that folder and only does the automatic (headless) token refresh from then on.
+> **Important:** The container is **headless** — it can't do interactive browser login. So you **must** sign in on the host machine first (one time), then the container reuses that session.
 
 ```bash
-docker compose up --build
-# -> Copilot OpenAI-compatible API on http://localhost:8000
+# STEP 0: Navigate to project root
+# (same directory as docker-compose.yml, app.py, and this README)
+cd /path/to/Windows-Copilot-API
+pwd  # Verify: should end with .../Windows-Copilot-API
+
+# STEP 1: Sign in on the host (one-time setup)
+# ⚠️ MUST run in project root for session/ to be created in the correct location
+python -m copilot login
+# Opens a browser → you sign in → creates ./session/ folder
+
+# STEP 2: Run container
+# (still in project root)
+docker compose up
+# Mounts ./session/ → container reuses your login
+# No browser needed; runs headless
+# Restarts don't require re-login
+
+# STEP 3: Test the API (in a new terminal)
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
-The [docker-compose.yml](docker-compose.yml) maps port `8000` and bind-mounts your `session/` so the login persists across restarts. Tune `RATE_LIMIT_RPM` / `RATE_LIMIT_BURST` there. To run without Compose, build and pass the same bindings by hand:
+The [docker-compose.yml](docker-compose.yml) maps port `8000` and bind-mounts your `session/` folder (which holds the cached token + browser profile) so authentication and rate limits persist across container restarts.
+
+**Detailed setup:** See [DOCKER_SETUP.md](DOCKER_SETUP.md) for multi-account, Kubernetes, and security best practices.
+
+**Manual Docker** (without compose):
 
 ```bash
 docker build -t windows-copilot-api .
-docker run --rm -p 8000:8000 -v "$(pwd)/session:/app/session" windows-copilot-api
+docker run -d \
+  -p 8000:8000 \
+  -v "$(pwd)/session:/app/session" \
+  -e COPILOT_MODE=m365 \
+  windows-copilot-api
 ```
 
 ---
