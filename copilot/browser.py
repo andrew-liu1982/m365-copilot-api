@@ -433,7 +433,6 @@ class BrowserCopilot:
             raise RuntimeError(f"M365 send button not found: {exc}")
         send_btn.click()
 
-<<<<<<< HEAD
         # Wait longer for Copilot to produce a response - it often takes 10+ seconds
         time.sleep(2)
 
@@ -487,6 +486,7 @@ class BrowserCopilot:
                     # Check if this is real content or just a loading message
                     is_loading = any(state in text for state in LOADING_STATES)
                     
+                    if not is_loading and len(text) > 10:
                         # We have real content!
                         if text == last_text:
                             stable_count += 1
