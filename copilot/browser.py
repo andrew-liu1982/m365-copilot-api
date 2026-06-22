@@ -448,7 +448,10 @@ class BrowserCopilot:
             "Putting it together", "Sorting it out", "Searching", "Taking a look",
             "Thinking", "Looking", "Fetching", "Analyzing", "Compiling",
             "Organizing", "Calculating", "Processing", "Building", "Reviewing",
-            "Working on", "Researching", "Checking"
+            "Working on", "Researching", "Checking", "Collecting", "Planning",
+            "Investigating", "Summarizing", "Preparing", "Setting up",
+            "Getting things ready", "Coming up with", "Putting together",
+            "Let me", "I'll", "I will", "One moment", "Just a moment",
         }
         
         poll_attempt = 0
@@ -484,7 +487,8 @@ class BrowserCopilot:
                 
                 if text:
                     # Check if this is real content or just a loading message
-                    is_loading = any(state in text for state in LOADING_STATES)
+                    text_lower = text.lower()
+                    is_loading = any(state.lower() in text_lower for state in LOADING_STATES)
                     
                     if not is_loading and len(text) > 10:
                         # We have real content!

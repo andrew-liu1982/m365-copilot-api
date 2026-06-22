@@ -42,10 +42,13 @@ def app(host=None, port=None) -> None:
     # Ensure a signed-in Copilot session exists before we start serving. On the
     # very first run this triggers the interactive browser sign-in (instead of
     # letting the first HTTP request fail), then caches it for reuse.
-    try:
-        load_auth()
-    except Exception as exc:
-        print(f"Warning: could not establish a Copilot session: {exc}")
+    # Consumer mode works anonymously — skip the browser auth step.
+    mode = os.environ.get("COPILOT_MODE", "m365")
+    if mode != "consumer":
+        try:
+            load_auth()
+        except Exception as exc:
+            print(f"Warning: could not establish a Copilot session: {exc}")
 
     print(f"Copilot OpenAI-compatible API on http://{host}:{port}  (POST /v1/chat/completions)")
     uvicorn.run(_api, host=host, port=port)
