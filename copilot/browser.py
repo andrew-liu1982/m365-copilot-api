@@ -398,7 +398,6 @@ class BrowserCopilot:
 
     def _m365_chat(self, prompt: str, timeout: int) -> Generator[str, None, None]:
         """Send a prompt via M365 Copilot's web UI (DOM-based)."""
-        timeout = min(timeout, 60)
         page = self._page
 
         # Ensure we are on the M365 chat page
@@ -434,27 +433,85 @@ class BrowserCopilot:
             raise RuntimeError(f"M365 send button not found: {exc}")
         send_btn.click()
 
-        # Poll for the response
-        deadline = time.time() + timeout
+        # Wait longer for Copilot to produce a response - it often takes 10+ seconds
+        time.sleep(2)
+
+        # Poll for the complete response with more patience
+        deadline = time.time() + max(timeout, 60)  # Ensure minimum 60s for Copilot
+        last_text = ""
+        stable_count = 0
+        max_stable_for_completion = 6  # Must be unchanged for 6+ polls (~3 seconds) to consider done
+        
+        # Filter out placeholder/intermediate states
+        LOADING_STATES = {
+            "Gathering", "Generating", "Checking that", "Making it happen", 
+            "Putting it together", "Sorting it out", "Searching", "Taking a look",
+            "Thinking", "Looking", "Fetching", "Analyzing", "Compiling",
+            "Organizing", "Calculating", "Processing", "Building", "Reviewing",
+            "Working on", "Researching", "Checking"
+        }
+        
+        poll_attempt = 0
         while time.time() < deadline:
-            containers = page.locator('[id^="chatMessageContainer"]')
-            count = containers.count()
-            if count > 0:
-                last = containers.nth(count - 1)
-                try:
-                    resp_div = last.locator("> div").nth(1)
-                    raw = resp_div.inner_text(timeout=2000)
-                except Exception:
-                    raw = ""
-                if "Copilot said:" in raw:
-                    text = raw.split("Copilot said:")[1].strip()
-                    first_part = text.split("\n\n")[0].strip()
-                    if first_part and "Gathering" not in first_part and "Generating" not in first_part:
-                        yield first_part
-                        return
+            try:
+                # Try multiple selectors since M365 UI might vary
+                containers = page.locator('[id^="chatMessageContainer"]')
+                count = containers.count()
+                
+                text = None
+                if count > 0:
+                    # Try to get the last message container
+                    last = containers.nth(count - 1)
+                    try:
+                        raw = last.inner_text(timeout=2000)
+                        if "Copilot said:" in raw:
+                            text = raw.split("Copilot said:")[1].strip()
+                    except Exception:
+                        pass
+                
+                # Fallback: try to find any div with substantial text
+                if not text:
+                    try:
+                        all_divs = page.locator('div[role="region"]')
+                        if all_divs.count() > 0:
+                            for i in range(all_divs.count() - 1, max(-1, all_divs.count() - 5), -1):
+                                potential = all_divs.nth(i).inner_text(timeout=1000)
+                                if potential and len(potential) > 10:
+                                    text = potential
+                                    break
+                    except Exception:
+                        pass
+                
+                if text:
+                    # Check if this is real content or just a loading message
+                    is_loading = any(state in text for state in LOADING_STATES)
+                    
+                    if not is_loading and len(text) > 10:
+                        # We have real content!
+                        if text == last_text:
+                            stable_count += 1
+                            if stable_count >= max_stable_for_completion:
+                                yield text
+                                return
+                        else:
+                            stable_count = 0
+                            last_text = text
+                    elif is_loading:
+                        # Reset counters when we see loading state
+                        stable_count = 0
+                        last_text = ""
+            except Exception:
+                pass
+            
+            poll_attempt += 1
             time.sleep(0.5)
 
-        raise TimeoutError(f"M365 Copilot did not respond within {timeout}s")
+        # If we have accumulated substantial text, return it
+        if last_text and len(last_text) > 10:
+            yield last_text
+            return
+            
+        raise TimeoutError(f"M365 Copilot did not respond adequately within {timeout}s")
 
     def _ensure_started(self) -> None:
         if self._context is None or self._page is None:
