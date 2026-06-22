@@ -5,6 +5,8 @@ import os
 # The single model id this bridge advertises (Copilot has no model selector).
 MODEL_NAME = "copilot"
 
+COPILOT_MODE = "m365" 
+
 # Self-imposed rate limit (Copilot publishes none). Tune to whatever ceiling the
 # probe in tests/ratelimit.py shows your account tolerates.
 #   RATE_LIMIT_RPM   requests/minute the bridge will accept; 0 disables limiting.
@@ -15,4 +17,4 @@ RATE_LIMIT_RPM = float(os.environ.get("RATE_LIMIT_RPM", "12"))  # 12 rpm ≈ 5s 
 RATE_LIMIT_BURST = int(os.environ.get("RATE_LIMIT_BURST", "4"))
 
 # M365 vs consumer Copilot mode
-COPILOT_MODE = os.environ.get("COPILOT_MODE", "consumer")
+COPILOT_MODE = os.environ.get("COPILOT_MODE", "m365")
