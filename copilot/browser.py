@@ -433,6 +433,7 @@ class BrowserCopilot:
             raise RuntimeError(f"M365 send button not found: {exc}")
         send_btn.click()
 
+<<<<<<< HEAD
         # Wait longer for Copilot to produce a response - it often takes 10+ seconds
         time.sleep(2)
 
@@ -491,11 +492,39 @@ class BrowserCopilot:
                         if text == last_text:
                             stable_count += 1
                             if stable_count >= max_stable_for_completion:
+=======
+        # Poll for the complete response (wait until it stops changing)
+        deadline = time.time() + timeout
+        last_text = ""
+        stable_count = 0  # count of unchanged polls = response is done
+        
+        while time.time() < deadline:
+            containers = page.locator('[id^="chatMessageContainer"]')
+            count = containers.count()
+            if count > 0:
+                last = containers.nth(count - 1)
+                try:
+                    resp_div = last.locator("> div").nth(1)
+                    raw = resp_div.inner_text(timeout=2000)
+                except Exception:
+                    raw = ""
+                
+                if "Copilot said:" in raw:
+                    text = raw.split("Copilot said:")[1].strip()
+                    
+                    # Filter out loading states
+                    if text and not any(x in text for x in ["Gathering", "Generating", "Checking that", "Making it happen", "Putting it together", "Sorting it out"]):
+                        # Check if response is stable (unchanged for 2+ polls = done)
+                        if text == last_text:
+                            stable_count += 1
+                            if stable_count >= 2:  # text hasn't changed for 2 polls
+>>>>>>> 12bd8aa9f94aacf371c31eec81a5083822e16fc2
                                 yield text
                                 return
                         else:
                             stable_count = 0
                             last_text = text
+<<<<<<< HEAD
                     elif is_loading:
                         # Reset counters when we see loading state
                         stable_count = 0
@@ -512,6 +541,17 @@ class BrowserCopilot:
             return
             
         raise TimeoutError(f"M365 Copilot did not respond adequately within {timeout}s")
+=======
+            
+            time.sleep(0.5)
+
+        # If we have any accumulated text, yield it even if timed out
+        if last_text:
+            yield last_text
+            return
+            
+        raise TimeoutError(f"M365 Copilot did not respond within {timeout}s")
+>>>>>>> 12bd8aa9f94aacf371c31eec81a5083822e16fc2
 
     def _ensure_started(self) -> None:
         if self._context is None or self._page is None:
